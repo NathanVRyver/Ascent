@@ -3,6 +3,7 @@ mod systems;
 mod resources;
 mod ui;
 mod visualization;
+mod wing_geometry;
 
 use bevy::prelude::*;
 use ui::UIPlugin;
