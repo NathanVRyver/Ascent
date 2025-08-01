@@ -18,6 +18,7 @@ impl Plugin for SimulationPlugin {
             .add_plugins(UIPlugin)
             .init_resource::<resources::SimulationParams>()
             .init_resource::<WeatherParams>()
+            .init_resource::<visualization::VisualizationSettings>()
             .add_systems(Startup, (
                 systems::setup_camera,
                 systems::setup_environment,
@@ -28,6 +29,8 @@ impl Plugin for SimulationPlugin {
                 systems::update_flight_dynamics,
                 systems::handle_input,
                 visualization::visualize_forces,
+                visualization::update_trajectory_trail,
+                visualization::toggle_visualization_settings,
                 flapping::update_flapping_animation,
                 flapping::toggle_flapping,
             ));
