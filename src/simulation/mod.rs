@@ -4,6 +4,7 @@ mod resources;
 mod ui;
 mod visualization;
 mod wing_geometry;
+mod flapping;
 
 use bevy::prelude::*;
 use ui::UIPlugin;
