@@ -2,35 +2,31 @@ use bevy::prelude::*;
 use super::components::*;
 
 #[derive(Component)]
-pub struct FollowCamera {
-    pub target_offset: Vec3,
-    pub follow_speed: f32,
-    pub look_ahead: f32,
-    pub height_offset: f32,
-    pub distance: f32,
+pub struct POVCamera {
+    pub head_offset: Vec3,
+    pub look_sensitivity: f32,
+    pub pitch: f32,
+    pub yaw: f32,
 }
 
-impl Default for FollowCamera {
+impl Default for POVCamera {
     fn default() -> Self {
         Self {
-            target_offset: Vec3::ZERO,
-            follow_speed: 2.0,
-            look_ahead: 5.0,
-            height_offset: 8.0,
-            distance: 15.0,
+            head_offset: Vec3::new(0.0, 0.6, 0.1), // Position at head level, slightly forward
+            look_sensitivity: 2.0,
+            pitch: 0.0,
+            yaw: 0.0,
         }
     }
 }
 
-pub fn setup_follow_camera(mut commands: Commands) {
-    // Setup camera at a default position - it will find and follow the flyer later
-    let camera_position = Vec3::new(-15.0, 8.0, 0.0);
-    
+pub fn setup_pov_camera(mut commands: Commands) {
+    // POV camera will be positioned relative to the flyer
     commands.spawn((
         Camera3d::default(),
-        Transform::from_translation(camera_position)
-            .looking_at(Vec3::new(0.0, 5.0, 0.0), Vec3::Y),
-        FollowCamera::default(),
+        Transform::from_translation(Vec3::new(0.0, 5.6, 0.1)) // Start at head level of flyer
+            .looking_at(Vec3::new(0.0, 5.6, 1.0), Vec3::Y),
+        POVCamera::default(),
     ));
     
     commands.spawn((
@@ -43,84 +39,61 @@ pub fn setup_follow_camera(mut commands: Commands) {
     ));
 }
 
-pub fn update_follow_camera(
+pub fn update_pov_camera(
     time: Res<Time>,
-    flyer_query: Query<(&Transform, &FlightDynamics), (With<Flyer>, Without<FollowCamera>)>,
-    mut camera_query: Query<(&mut Transform, &mut FollowCamera), (With<Camera3d>, Without<Flyer>)>,
+    flyer_query: Query<&Transform, (With<Flyer>, Without<POVCamera>)>,
+    mut camera_query: Query<(&mut Transform, &mut POVCamera), (With<Camera3d>, Without<Flyer>)>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-    let Ok((flyer_transform, flyer_dynamics)) = flyer_query.get_single() else { return; };
-    let Ok((mut camera_transform, mut follow_camera)) = camera_query.get_single_mut() else { return; };
+    let Ok(flyer_transform) = flyer_query.single() else { return; };
+    let Ok((mut camera_transform, mut pov_camera)) = camera_query.single_mut() else { return; };
     
-    // Manual camera controls override
-    let mut manual_control = false;
-    let rotation_speed = 2.0 * time.delta_secs();
-    let zoom_speed = 20.0 * time.delta_secs();
+    let rotation_speed = pov_camera.look_sensitivity * time.delta_secs();
     
+    // Handle look controls
     if keyboard.pressed(KeyCode::ArrowLeft) {
-        camera_transform.rotate_around(
-            flyer_transform.translation,
-            Quat::from_rotation_y(rotation_speed),
-        );
-        manual_control = true;
+        pov_camera.yaw += rotation_speed;
     }
     if keyboard.pressed(KeyCode::ArrowRight) {
-        camera_transform.rotate_around(
-            flyer_transform.translation,
-            Quat::from_rotation_y(-rotation_speed),
-        );
-        manual_control = true;
+        pov_camera.yaw -= rotation_speed;
     }
     if keyboard.pressed(KeyCode::ArrowUp) {
-        follow_camera.distance = (follow_camera.distance - zoom_speed).max(5.0);
-        manual_control = true;
+        pov_camera.pitch = (pov_camera.pitch + rotation_speed).min(1.5); // Limit pitch
     }
     if keyboard.pressed(KeyCode::ArrowDown) {
-        follow_camera.distance = (follow_camera.distance + zoom_speed).min(50.0);
-        manual_control = true;
+        pov_camera.pitch = (pov_camera.pitch - rotation_speed).max(-1.5); // Limit pitch
     }
     
-    // Auto-follow when not manually controlling
-    if !manual_control {
-        let target_position = flyer_transform.translation;
-        let velocity_prediction = flyer_dynamics.velocity * follow_camera.look_ahead;
-        let predicted_position = target_position + velocity_prediction;
-        
-        // Calculate ideal camera position
-        let camera_offset = Vec3::new(
-            -follow_camera.distance * 0.7,
-            follow_camera.height_offset,
-            follow_camera.distance * 0.3,
-        );
-        
-        let ideal_camera_pos = predicted_position + camera_offset;
-        
-        // Smooth interpolation
-        let current_pos = camera_transform.translation;
-        let new_pos = current_pos.lerp(ideal_camera_pos, follow_camera.follow_speed * time.delta_secs());
-        
-        camera_transform.translation = new_pos;
-        camera_transform.look_at(predicted_position, Vec3::Y);
-    }
+    // Position camera at the flyer's head
+    let head_position = flyer_transform.translation + 
+        flyer_transform.rotation * pov_camera.head_offset;
     
-    // Always keep camera looking at the flyer when manually controlling
-    if manual_control {
-        let to_target = (flyer_transform.translation - camera_transform.translation).normalize();
-        camera_transform.translation = flyer_transform.translation - to_target * follow_camera.distance;
-        camera_transform.look_at(flyer_transform.translation, Vec3::Y);
-    }
+    camera_transform.translation = head_position;
+    
+    // Apply pitch and yaw rotations relative to the flyer's orientation
+    let base_rotation = flyer_transform.rotation;
+    let pitch_rotation = Quat::from_rotation_x(pov_camera.pitch);
+    let yaw_rotation = Quat::from_rotation_y(pov_camera.yaw);
+    
+    camera_transform.rotation = base_rotation * yaw_rotation * pitch_rotation;
 }
 
-pub fn reset_camera_on_flyer_reset(
+pub fn reset_pov_camera_on_flyer_reset(
     flyer_query: Query<&Transform, (With<Flyer>, Changed<Transform>)>,
-    mut camera_query: Query<&mut Transform, (With<FollowCamera>, Without<Flyer>)>,
+    mut camera_query: Query<(&mut Transform, &mut POVCamera), (With<POVCamera>, Without<Flyer>)>,
 ) {
-    if let (Ok(flyer_transform), Ok(mut camera_transform)) = (flyer_query.get_single(), camera_query.get_single_mut()) {
+    if let (Ok(flyer_transform), Ok((mut camera_transform, mut pov_camera))) = (flyer_query.single(), camera_query.single_mut()) {
         // Check if flyer was reset (back to starting position)
         if flyer_transform.translation.distance(Vec3::new(0.0, 5.0, 0.0)) < 1.0 {
-            let camera_position = flyer_transform.translation + Vec3::new(-15.0, 8.0, 0.0);
-            camera_transform.translation = camera_position;
-            camera_transform.look_at(flyer_transform.translation, Vec3::Y);
+            // Reset POV camera to head position
+            let head_position = flyer_transform.translation + 
+                flyer_transform.rotation * pov_camera.head_offset;
+            camera_transform.translation = head_position;
+            camera_transform.rotation = flyer_transform.rotation;
+            
+            // Reset pitch and yaw
+            pov_camera.pitch = 0.0;
+            pov_camera.yaw = 0.0;
         }
     }
 }

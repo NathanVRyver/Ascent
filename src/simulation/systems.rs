@@ -9,7 +9,6 @@ use crate::physics::{
 };
 use super::components::*;
 use super::resources::*;
-use super::wing_geometry::{create_wing_mesh, WingGeometry};
 use super::flapping::FlappingWing;
 use super::visualization::TrajectoryTrail;
 use super::human_model::{create_human_flyer_bundle, create_realistic_wings};
@@ -74,26 +73,13 @@ pub fn spawn_flyer(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Simplified for debugging - use basic shapes first
-    let body_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.6, 0.4),
-        metallic: 0.2,  
-        perceptual_roughness: 0.6,
-        ..default()
-    });
-    
-    let wing_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.9, 0.9, 0.95, 0.9),
-        alpha_mode: AlphaMode::Blend,
-        double_sided: true,
-        metallic: 0.1,
-        perceptual_roughness: 0.3,
-        ..default()
-    });
+    // Create human model
+    let (torso_mesh, torso_material, body_parts) = create_human_flyer_bundle(&mut meshes, &mut materials);
+    let (wing_mesh, wing_material) = create_realistic_wings(&mut meshes, &mut materials);
     
     commands.spawn((
-        Mesh3d(meshes.add(Capsule3d::new(0.3, 1.8))),
-        MeshMaterial3d(body_material),
+        torso_mesh,
+        torso_material,
         Transform::from_translation(Vec3::new(0.0, 5.0, 0.0)),
         Flyer { mass: 80.0 },
         Propulsion {
@@ -123,10 +109,15 @@ pub fn spawn_flyer(
         TrajectoryTrail::default(),
         FlightStabilizer::default(),
     )).with_children(|parent| {
-        // Simple wings for debugging
+        // Add body parts
+        for (mesh, material, transform) in body_parts {
+            parent.spawn((mesh, material, transform));
+        }
+        
+        // Add wings
         parent.spawn((
-            Mesh3d(meshes.add(Cuboid::new(5.0, 0.1, 1.0))),
-            MeshMaterial3d(wing_material.clone()),
+            wing_mesh.clone(),
+            wing_material.clone(),
             Transform::from_translation(Vec3::new(-2.5, 0.5, 0.0)),
             Wing {
                 span: 5.0,
@@ -142,8 +133,8 @@ pub fn spawn_flyer(
         ));
         
         parent.spawn((
-            Mesh3d(meshes.add(Cuboid::new(5.0, 0.1, 1.0))),
-            MeshMaterial3d(wing_material),
+            wing_mesh,
+            wing_material,
             Transform::from_translation(Vec3::new(2.5, 0.5, 0.0)),
             Wing {
                 span: 5.0,
