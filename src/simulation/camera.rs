@@ -119,7 +119,7 @@ pub fn reset_camera_on_flyer_reset(
 ) {
     if let (Ok(flyer_transform), Ok(mut camera_transform)) = (flyer_query.get_single(), camera_query.get_single_mut()) {
         // Check if flyer was reset (back to starting position)
-        if flyer_transform.translation.distance(Vec3::new(0.0, 10.0, 0.0)) < 1.0 {
+        if flyer_transform.translation.distance(Vec3::new(0.0, 5.0, 0.0)) < 1.0 {
             let camera_position = flyer_transform.translation + Vec3::new(-15.0, 8.0, 0.0);
             camera_transform.translation = camera_position;
             camera_transform.look_at(flyer_transform.translation, Vec3::Y);

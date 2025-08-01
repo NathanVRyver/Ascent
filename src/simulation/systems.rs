@@ -26,7 +26,7 @@ pub fn setup_environment(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 200.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(500.0, 500.0))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.2, 0.35, 0.2),
             perceptual_roughness: 0.8,
@@ -42,18 +42,18 @@ pub fn setup_environment(
         ..default()
     });
     
-    for i in -20..=20 {
+    for i in -50..=50 {
         if i == 0 { continue; }
-        let offset = i as f32 * 5.0;
+        let offset = i as f32 * 10.0;
         
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(200.0, 0.02, 0.05))),
+            Mesh3d(meshes.add(Cuboid::new(500.0, 0.02, 0.1))),
             MeshMaterial3d(grid_material.clone()),
             Transform::from_translation(Vec3::new(0.0, 0.01, offset)),
         ));
         
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.05, 0.02, 200.0))),
+            Mesh3d(meshes.add(Cuboid::new(0.1, 0.02, 500.0))),
             MeshMaterial3d(grid_material.clone()),
             Transform::from_translation(Vec3::new(offset, 0.01, 0.0)),
         ));
@@ -80,7 +80,7 @@ pub fn spawn_flyer(
     commands.spawn((
         torso_mesh,
         torso_material,
-        Transform::from_translation(Vec3::new(0.0, 10.0, 0.0)),
+        Transform::from_translation(Vec3::new(0.0, 5.0, 0.0)),
         Flyer { mass: 80.0 },
         Propulsion {
             thrust_power: 500.0,
@@ -96,7 +96,7 @@ pub fn spawn_flyer(
             forces: Forces::default(),
         },
         FlightData {
-            altitude: 10.0,
+            altitude: 5.0,
             airspeed: 0.0,
             vertical_speed: 0.0,
             flight_time: 0.0,
@@ -316,12 +316,32 @@ pub fn update_flight_dynamics(
         let displacement = dynamics.velocity * dt;
         transform.translation += displacement;
         
-        if transform.translation.y < 0.5 {
-            transform.translation.y = 0.5;
-            dynamics.velocity.y = dynamics.velocity.y.max(0.0);
+        // Ground collision with better landing mechanics
+        let ground_level = 1.0; // Account for human height
+        if transform.translation.y <= ground_level {
+            transform.translation.y = ground_level;
             
-            if dynamics.velocity.length() > 15.0 {
-                info!("Hard landing! Impact velocity: {:.1} m/s", dynamics.velocity.length());
+            let impact_velocity = dynamics.velocity.length();
+            
+            if impact_velocity > 20.0 {
+                info!("CRASH! Impact velocity: {:.1} m/s", impact_velocity);
+                // Hard crash - stop all movement
+                dynamics.velocity = Vec3::ZERO;
+                dynamics.acceleration = Vec3::ZERO;
+            } else if impact_velocity > 8.0 {
+                info!("Hard landing! Impact velocity: {:.1} m/s", impact_velocity);
+                // Hard landing - reduce all velocity
+                dynamics.velocity *= 0.3;
+                dynamics.velocity.y = 0.0;
+            } else if impact_velocity > 3.0 {
+                info!("Landing. Impact velocity: {:.1} m/s", impact_velocity);
+                // Normal landing - soft stop
+                dynamics.velocity *= 0.8;
+                dynamics.velocity.y = 0.0;
+            } else {
+                // Gentle touchdown
+                dynamics.velocity.y = 0.0;
+                dynamics.velocity *= 0.95;
             }
         }
         
@@ -376,14 +396,14 @@ pub fn handle_input(
     if keyboard.just_pressed(KeyCode::KeyR) {
         params.is_running = false;
         for (mut transform, mut dynamics, mut flight_data, mut propulsion) in query.iter_mut() {
-            transform.translation = Vec3::new(0.0, 10.0, 0.0);
+            transform.translation = Vec3::new(0.0, 5.0, 0.0);
             
             dynamics.velocity = Vec3::new(0.0, 0.0, 0.0);
             dynamics.acceleration = Vec3::ZERO;
             dynamics.angular_velocity = Vec3::ZERO;
             dynamics.forces = Forces::default();
             
-            flight_data.altitude = 10.0;
+            flight_data.altitude = 5.0;
             flight_data.airspeed = 0.0;
             flight_data.vertical_speed = 0.0;
             flight_data.flight_time = 0.0;
