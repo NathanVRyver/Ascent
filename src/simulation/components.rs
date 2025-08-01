@@ -6,12 +6,24 @@ pub struct Flyer {
 }
 
 #[derive(Component)]
+pub struct Propulsion {
+    pub thrust_power: f32,
+    pub thrust_direction: Vec3,
+    pub efficiency: f32,
+    pub propeller_diameter: f32,
+    pub throttle: f32,
+}
+
+#[derive(Component)]
 pub struct Wing {
-//    pub span: f32,         // Wing span in meters
-//    pub chord: f32,        // Average chord length in meters
-    pub area: f32,         // Total wing area in m²
- //   pub aspect_ratio: f32, // Span² / Area
-    pub angle_of_attack: f32, // Angle in radians
+    pub span: f32,
+    pub chord: f32,
+    pub area: f32,
+    pub aspect_ratio: f32,
+    pub angle_of_attack: f32,
+    pub lift_coefficient_base: f32,
+    pub drag_coefficient_base: f32,
+    pub efficiency_factor: f32,
 }
 
 #[derive(Component)]
@@ -42,3 +54,17 @@ pub struct FlightData {
 
 #[derive(Component)]
 pub struct GroundPlane;
+
+#[derive(Component)]
+pub struct Atmosphere {
+    pub air_density: f32,
+    pub wind_velocity: Vec3,
+    pub turbulence_intensity: f32,
+    pub temperature: f32,
+}
+
+#[derive(Component)]
+pub struct StallIndicator {
+    pub is_stalled: bool,
+    pub stall_severity: f32,
+}
