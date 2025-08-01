@@ -192,7 +192,7 @@ fn draw_wind_indicators(gizmos: &mut Gizmos, wind_velocity: Vec3) {
     }
 }
 
-fn draw_3d_text(gizmos: &mut Gizmos, _pos: Vec3, _text: &str, _color: Color) {
+fn draw_3d_text(_gizmos: &mut Gizmos, _pos: Vec3, _text: &str, _color: Color) {
     // Text rendering in 3D space would require additional implementation
     // For now, we'll skip this as it requires more complex text rendering
 }

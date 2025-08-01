@@ -1,4 +1,3 @@
-use bevy::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StallParams {

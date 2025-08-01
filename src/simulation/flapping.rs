@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use crate::simulation::components::*;
 
 #[derive(Component)]
 pub struct FlappingWing {
@@ -79,7 +78,7 @@ pub fn update_flapping_animation(
         );
         
         for child in children.iter() {
-            if let Ok((joint, mut joint_transform)) = joint_query.get_mut(*child) {
+            if let Ok((joint, mut joint_transform)) = joint_query.get_mut(child) {
                 match joint.joint_type {
                     WingJointType::Shoulder => {
                         joint_transform.rotation = Quat::from_rotation_x(flap_angle * 0.3);

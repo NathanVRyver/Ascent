@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Resource)]
 pub struct WeatherParams {
     pub base_wind: Vec3,
     pub turbulence_intensity: f32,
@@ -51,7 +51,7 @@ pub fn calculate_wind_with_turbulence(
         (position.z * 0.12 + time * 0.6).sin() * weather.turbulence_intensity,
     ) * 10.0;
     
-    let gust_chance: f32 = rng.gen();
+    let gust_chance: f32 = rng.gen_range(0.0..1.0);
     let gust = if gust_chance < weather.gust_frequency {
         Vec3::new(
             rng.gen_range(-1.0..1.0),

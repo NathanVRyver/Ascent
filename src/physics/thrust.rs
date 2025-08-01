@@ -24,7 +24,7 @@ pub fn calculate_propeller_efficiency(advance_ratio: f32) -> f32 {
         0.0
     } else {
         let peak_ratio = 0.8;
-        let width = 0.5;
+        let width: f32 = 0.5;
         let efficiency = (-(advance_ratio - peak_ratio).powi(2) / (2.0 * width.powi(2))).exp();
         efficiency * 0.85
     }

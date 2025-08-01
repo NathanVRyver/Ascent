@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::physics::{
-    lift::{calculate_lift_force, calculate_lift_coefficient, LiftParams},
+    lift::{calculate_lift_force, LiftParams},
     drag::{calculate_total_drag, DragParams},
     ground_effect::{calculate_ground_effect_factor, apply_ground_effect_to_lift, GroundEffectParams},
     stall::{calculate_lift_coefficient_with_stall, calculate_drag_coefficient_stalled, StallParams},
@@ -196,7 +196,7 @@ pub fn update_physics(
         let mut total_wing_area = 0.0;
         
         for child in children.iter() {
-            if let Ok((wing, flapping)) = wing_query.get_mut(*child) {
+            if let Ok((wing, flapping)) = wing_query.get_mut(child) {
                 total_wing_area += wing.area;
                 
                 let airspeed_vector = dynamics.velocity - atmosphere.wind_velocity;
@@ -308,7 +308,8 @@ pub fn update_flight_dynamics(
     let dt = time.delta_secs() * params.simulation_speed;
     
     for (mut transform, mut dynamics, mut flight_data) in query.iter_mut() {
-        dynamics.velocity += dynamics.acceleration * dt;
+        let acceleration = dynamics.acceleration;
+        dynamics.velocity += acceleration * dt;
         
         let displacement = dynamics.velocity * dt;
         transform.translation += displacement;

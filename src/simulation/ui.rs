@@ -13,11 +13,9 @@ impl Plugin for UIPlugin {
             .add_plugins(EguiPlugin)
             .init_resource::<UIState>()
             .add_systems(Startup, setup_ui)
-            .add_systems(Update, (
-                update_ui_text,
-                handle_parameter_input,
-                render_egui_ui,
-            ));
+            .add_systems(Update, update_ui_text)
+            .add_systems(Update, handle_parameter_input)
+            .add_systems(Update, render_egui_ui);
     }
 }
 

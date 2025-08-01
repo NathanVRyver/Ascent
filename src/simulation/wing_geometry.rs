@@ -41,8 +41,8 @@ pub fn create_wing_mesh(geometry: &WingGeometry) -> Mesh {
         let sweep_offset = span_position.abs() * geometry.sweep_angle.tan();
         let dihedral_height = span_position.abs() * geometry.dihedral_angle.tan();
         
-        let leading_edge = Vec3::new(sweep_offset, dihedral_height, span_position);
-        let trailing_edge = Vec3::new(sweep_offset + chord, dihedral_height, span_position);
+        let _leading_edge = Vec3::new(sweep_offset, dihedral_height, span_position);
+        let _trailing_edge = Vec3::new(sweep_offset + chord, dihedral_height, span_position);
         
         let profile_points = generate_airfoil_profile(chord, 10);
         
