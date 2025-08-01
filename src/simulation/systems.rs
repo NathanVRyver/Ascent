@@ -12,6 +12,8 @@ use super::resources::*;
 use super::wing_geometry::{create_wing_mesh, WingGeometry};
 use super::flapping::FlappingWing;
 use super::visualization::TrajectoryTrail;
+use super::human_model::{create_human_flyer_bundle, create_realistic_wings};
+use super::stabilization::FlightStabilizer;
 use crate::physics::weather::WeatherParams;
 
 pub fn setup_camera(mut commands: Commands) {
@@ -72,28 +74,12 @@ pub fn spawn_flyer(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let body_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.6, 0.4),
-        metallic: 0.2,
-        perceptual_roughness: 0.6,
-        ..default()
-    });
-    
-    let wing_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.9, 0.9, 0.95, 0.9),
-        alpha_mode: AlphaMode::Blend,
-        double_sided: true,
-        metallic: 0.1,
-        perceptual_roughness: 0.3,
-        ..default()
-    });
-    
-    let wing_geometry = WingGeometry::default();
-    let wing_mesh = create_wing_mesh(&wing_geometry);
+    let (torso_mesh, torso_material, body_parts) = create_human_flyer_bundle(&mut meshes, &mut materials);
+    let (wing_mesh, wing_material) = create_realistic_wings(&mut meshes, &mut materials);
     
     commands.spawn((
-        Mesh3d(meshes.add(Capsule3d::new(0.3, 1.8))),
-        MeshMaterial3d(body_material),
+        torso_mesh,
+        torso_material,
         Transform::from_translation(Vec3::new(0.0, 10.0, 0.0)),
         Flyer { mass: 80.0 },
         Propulsion {
@@ -121,16 +107,44 @@ pub fn spawn_flyer(
             stall_severity: 0.0,
         },
         TrajectoryTrail::default(),
+        FlightStabilizer::default(),
     )).with_children(|parent| {
+        // Add body parts
+        for (mesh, material, transform) in body_parts {
+            parent.spawn((mesh, material, transform));
+        }
+        
+        // Add wings
         parent.spawn((
-            Mesh3d(meshes.add(wing_mesh.clone())),
-            MeshMaterial3d(wing_material.clone()),
-            Transform::from_translation(Vec3::new(0.0, 0.5, -0.3)),
+            wing_mesh.clone(),
+            wing_material.clone(),
+            Transform::from_translation(Vec3::new(0.0, 0.3, -0.1))
+                .with_rotation(Quat::from_rotation_y(0.1)),
             Wing {
-                span: wing_geometry.span,
-                chord: (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0,
-                area: wing_geometry.span * (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0,
-                aspect_ratio: wing_geometry.span.powi(2) / (wing_geometry.span * (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0),
+                span: 10.0,
+                chord: 0.8,
+                area: 8.0,
+                aspect_ratio: 12.5,
+                angle_of_attack: 0.1,
+                lift_coefficient_base: 1.2,
+                drag_coefficient_base: 0.03,
+                efficiency_factor: 0.85,
+            },
+            FlappingWing::default(),
+        ));
+        
+        // Mirror wing for other side
+        parent.spawn((
+            wing_mesh,
+            wing_material,
+            Transform::from_translation(Vec3::new(0.0, 0.3, -0.1))
+                .with_rotation(Quat::from_rotation_y(-0.1))
+                .with_scale(Vec3::new(1.0, -1.0, 1.0)),
+            Wing {
+                span: 10.0,
+                chord: 0.8,
+                area: 8.0,
+                aspect_ratio: 12.5,
                 angle_of_attack: 0.1,
                 lift_coefficient_base: 1.2,
                 drag_coefficient_base: 0.03,

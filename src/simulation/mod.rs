@@ -7,6 +7,8 @@ mod wing_geometry;
 mod flapping;
 mod telemetry;
 mod camera;
+mod human_model;
+mod stabilization;
 
 use bevy::prelude::*;
 use ui::UIPlugin;
@@ -40,7 +42,9 @@ impl Plugin for SimulationPlugin {
             .add_systems(Update, telemetry::toggle_telemetry_recording)
             .add_systems(Update, telemetry::export_telemetry_data)
             .add_systems(Update, camera::update_follow_camera)
-            .add_systems(Update, camera::reset_camera_on_flyer_reset);
+            .add_systems(Update, camera::reset_camera_on_flyer_reset)
+            .add_systems(Update, stabilization::apply_flight_stabilization)
+            .add_systems(Update, stabilization::add_ground_avoidance);
             // .add_systems(Update, telemetry::display_telemetry_stats);
     }
 }
