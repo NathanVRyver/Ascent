@@ -15,19 +15,7 @@ use super::visualization::TrajectoryTrail;
 use crate::physics::weather::WeatherParams;
 
 pub fn setup_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(15.0, 12.0, 15.0).looking_at(Vec3::new(0.0, 3.0, 0.0), Vec3::Y),
-    ));
-    
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 15000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.8, 0.2, 0.0)),
-    ));
+    // Camera will be set up by the follow camera system after flyer spawns
 }
 
 pub fn setup_environment(
@@ -116,14 +104,14 @@ pub fn spawn_flyer(
             throttle: 0.0,
         },
         FlightDynamics {
-            velocity: Vec3::new(0.0, 0.0, 15.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
             acceleration: Vec3::ZERO,
             angular_velocity: Vec3::ZERO,
             forces: Forces::default(),
         },
         FlightData {
             altitude: 10.0,
-            airspeed: 15.0,
+            airspeed: 0.0,
             vertical_speed: 0.0,
             flight_time: 0.0,
             distance_traveled: 0.0,
@@ -333,6 +321,7 @@ pub fn update_flight_dynamics(
 
 pub fn handle_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
     mut params: ResMut<SimulationParams>,
     mut wing_query: Query<&mut Wing>,
     mut query: Query<(
@@ -346,22 +335,27 @@ pub fn handle_input(
         params.is_running = !params.is_running;
     }
     
+    let dt = time.delta_secs();
+    let wing_control_speed = 1.0; // radians per second
+    
     if keyboard.pressed(KeyCode::KeyW) {
         for mut wing in wing_query.iter_mut() {
-            wing.angle_of_attack = (wing.angle_of_attack + 0.02).min(0.35);
+            wing.angle_of_attack = (wing.angle_of_attack + wing_control_speed * dt).min(0.35);
         }
     }
     if keyboard.pressed(KeyCode::KeyS) {
         for mut wing in wing_query.iter_mut() {
-            wing.angle_of_attack = (wing.angle_of_attack - 0.02).max(-0.15);
+            wing.angle_of_attack = (wing.angle_of_attack - wing_control_speed * dt).max(-0.15);
         }
     }
     
+    let throttle_speed = 2.0; // per second
+    
     for (_, _, _, mut propulsion) in query.iter_mut() {
         if keyboard.pressed(KeyCode::KeyT) {
-            propulsion.throttle = (propulsion.throttle + 0.02).min(1.0);
+            propulsion.throttle = (propulsion.throttle + throttle_speed * dt).min(1.0);
         } else {
-            propulsion.throttle = (propulsion.throttle - 0.05).max(0.0);
+            propulsion.throttle = (propulsion.throttle - throttle_speed * dt * 0.5).max(0.0);
         }
     }
     
@@ -370,13 +364,13 @@ pub fn handle_input(
         for (mut transform, mut dynamics, mut flight_data, mut propulsion) in query.iter_mut() {
             transform.translation = Vec3::new(0.0, 10.0, 0.0);
             
-            dynamics.velocity = Vec3::new(0.0, 0.0, 15.0);
+            dynamics.velocity = Vec3::new(0.0, 0.0, 0.0);
             dynamics.acceleration = Vec3::ZERO;
             dynamics.angular_velocity = Vec3::ZERO;
             dynamics.forces = Forces::default();
             
             flight_data.altitude = 10.0;
-            flight_data.airspeed = 15.0;
+            flight_data.airspeed = 0.0;
             flight_data.vertical_speed = 0.0;
             flight_data.flight_time = 0.0;
             flight_data.distance_traveled = 0.0;

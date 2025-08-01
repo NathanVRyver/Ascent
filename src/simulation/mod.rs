@@ -6,6 +6,7 @@ mod visualization;
 mod wing_geometry;
 mod flapping;
 mod telemetry;
+mod camera;
 
 use bevy::prelude::*;
 use ui::UIPlugin;
@@ -25,6 +26,7 @@ impl Plugin for SimulationPlugin {
                 systems::setup_camera,
                 systems::setup_environment,
                 systems::spawn_flyer,
+                camera::setup_follow_camera,
             ))
             .add_systems(Update, systems::update_physics)
             .add_systems(Update, systems::update_flight_dynamics)
@@ -36,7 +38,9 @@ impl Plugin for SimulationPlugin {
             .add_systems(Update, flapping::toggle_flapping)
             .add_systems(Update, telemetry::record_telemetry)
             .add_systems(Update, telemetry::toggle_telemetry_recording)
-            .add_systems(Update, telemetry::export_telemetry_data);
+            .add_systems(Update, telemetry::export_telemetry_data)
+            .add_systems(Update, camera::update_follow_camera)
+            .add_systems(Update, camera::reset_camera_on_flyer_reset);
             // .add_systems(Update, telemetry::display_telemetry_stats);
     }
 }
