@@ -5,6 +5,7 @@ mod ui;
 mod visualization;
 mod wing_geometry;
 mod flapping;
+mod telemetry;
 
 use bevy::prelude::*;
 use ui::UIPlugin;
@@ -19,6 +20,7 @@ impl Plugin for SimulationPlugin {
             .init_resource::<resources::SimulationParams>()
             .init_resource::<WeatherParams>()
             .init_resource::<visualization::VisualizationSettings>()
+            .init_resource::<telemetry::TelemetrySystem>()
             .add_systems(Startup, (
                 systems::setup_camera,
                 systems::setup_environment,
@@ -33,6 +35,10 @@ impl Plugin for SimulationPlugin {
                 visualization::toggle_visualization_settings,
                 flapping::update_flapping_animation,
                 flapping::toggle_flapping,
+                telemetry::record_telemetry,
+                telemetry::toggle_telemetry_recording,
+                telemetry::export_telemetry_data,
+                telemetry::display_telemetry_stats,
             ));
     }
 }
