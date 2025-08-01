@@ -1,23 +1,32 @@
 use bevy::prelude::*;
-use crate::physics::lift::{calculate_lift, LiftParams};
+use crate::physics::{
+    lift::{calculate_lift_force, calculate_lift_coefficient, LiftParams},
+    drag::{calculate_total_drag, DragParams},
+    ground_effect::{calculate_ground_effect_factor, apply_ground_effect_to_lift, GroundEffectParams},
+    stall::{calculate_lift_coefficient_with_stall, calculate_drag_coefficient_stalled, StallParams},
+    thrust::{calculate_thrust_force, ThrustParams},
+    weather::{calculate_air_density, calculate_wind_with_turbulence},
+};
 use super::components::*;
 use super::resources::*;
+use super::wing_geometry::{create_wing_mesh, WingGeometry};
+use super::flapping::FlappingWing;
+use super::visualization::TrajectoryTrail;
+use crate::physics::weather::WeatherParams;
 
 pub fn setup_camera(mut commands: Commands) {
-    // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(10.0, 10.0, 10.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        Transform::from_xyz(15.0, 12.0, 15.0).looking_at(Vec3::new(0.0, 3.0, 0.0), Vec3::Y),
     ));
     
-    // Light
     commands.spawn((
         DirectionalLight {
-            illuminance: 10000.0,
+            illuminance: 15000.0,
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4)),
+        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.8, 0.2, 0.0)),
     ));
 }
 
@@ -26,42 +35,48 @@ pub fn setup_environment(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Ground plane
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(100.0, 100.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 200.0))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.3, 0.5, 0.3),
+            base_color: Color::srgb(0.2, 0.35, 0.2),
+            perceptual_roughness: 0.8,
             ..default()
         })),
         Transform::from_translation(Vec3::ZERO),
         GroundPlane,
     ));
     
-    // Grid lines for reference
     let grid_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.5, 0.5, 0.5),
+        base_color: Color::srgb(0.4, 0.4, 0.4),
         unlit: true,
         ..default()
     });
     
-    for i in -10..=10 {
+    for i in -20..=20 {
         if i == 0 { continue; }
         let offset = i as f32 * 5.0;
         
-        // X-axis lines
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(100.0, 0.01, 0.1))),
+            Mesh3d(meshes.add(Cuboid::new(200.0, 0.02, 0.05))),
             MeshMaterial3d(grid_material.clone()),
             Transform::from_translation(Vec3::new(0.0, 0.01, offset)),
         ));
         
-        // Z-axis lines
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.1, 0.01, 100.0))),
+            Mesh3d(meshes.add(Cuboid::new(0.05, 0.02, 200.0))),
             MeshMaterial3d(grid_material.clone()),
             Transform::from_translation(Vec3::new(offset, 0.01, 0.0)),
         ));
     }
+    
+    commands.spawn((
+        Atmosphere {
+            air_density: 1.225,
+            wind_velocity: Vec3::new(5.0, 0.0, 2.0),
+            turbulence_intensity: 0.1,
+            temperature: 15.0,
+        },
+    ));
 }
 
 pub fn spawn_flyer(
@@ -69,140 +84,215 @@ pub fn spawn_flyer(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let flyer_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.2, 0.2),
+    let body_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.8, 0.6, 0.4),
+        metallic: 0.2,
+        perceptual_roughness: 0.6,
         ..default()
     });
     
     let wing_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.2, 0.2, 0.8, 0.8),
+        base_color: Color::srgba(0.9, 0.9, 0.95, 0.9),
         alpha_mode: AlphaMode::Blend,
+        double_sided: true,
+        metallic: 0.1,
+        perceptual_roughness: 0.3,
         ..default()
     });
     
-    // Spawn flyer entity (human body)
+    let wing_geometry = WingGeometry::default();
+    let wing_mesh = create_wing_mesh(&wing_geometry);
+    
     commands.spawn((
         Mesh3d(meshes.add(Capsule3d::new(0.3, 1.8))),
-        MeshMaterial3d(flyer_material),
-        Transform::from_translation(Vec3::new(0.0, 5.0, 0.0)),
+        MeshMaterial3d(body_material),
+        Transform::from_translation(Vec3::new(0.0, 10.0, 0.0)),
         Flyer { mass: 80.0 },
+        Propulsion {
+            thrust_power: 500.0,
+            thrust_direction: Vec3::new(0.0, 0.5, 1.0).normalize(),
+            efficiency: 0.85,
+            propeller_diameter: 1.2,
+            throttle: 0.0,
+        },
         FlightDynamics {
-            velocity: Vec3::new(0.0, 0.0, 10.0), // Start with some forward velocity
+            velocity: Vec3::new(0.0, 0.0, 15.0),
             acceleration: Vec3::ZERO,
             angular_velocity: Vec3::ZERO,
             forces: Forces::default(),
         },
         FlightData {
-            altitude: 5.0,
-            airspeed: 10.0,
+            altitude: 10.0,
+            airspeed: 15.0,
             vertical_speed: 0.0,
             flight_time: 0.0,
             distance_traveled: 0.0,
         },
+        StallIndicator {
+            is_stalled: false,
+            stall_severity: 0.0,
+        },
+        TrajectoryTrail::default(),
     )).with_children(|parent| {
-        // Spawn wings as children
-        let wing_span = 6.0;  // 6 meter wingspan
-        let wing_chord = 1.0; // 1 meter average chord
-        let wing_area = wing_span * wing_chord * 0.8; // Simplified calculation
-        
-        // Left wing
         parent.spawn((
-            Mesh3d(meshes.add(Cuboid::new(wing_span / 2.0, 0.1, wing_chord))),
+            Mesh3d(meshes.add(wing_mesh.clone())),
             MeshMaterial3d(wing_material.clone()),
-            Transform::from_translation(Vec3::new(-wing_span / 4.0, 0.0, 0.0)),
+            Transform::from_translation(Vec3::new(0.0, 0.5, -0.3)),
             Wing {
-                area: wing_area / 2.0,
-                angle_of_attack: 0.1, // ~5.7 degrees
-            },
-        ));
-        
-        // Right wing
-        parent.spawn((
-            Mesh3d(meshes.add(Cuboid::new(wing_span / 2.0, 0.1, wing_chord))),
-            MeshMaterial3d(wing_material),
-            Transform::from_translation(Vec3::new(wing_span / 4.0, 0.0, 0.0)),
-            Wing {
-                area: wing_area / 2.0,
+                span: wing_geometry.span,
+                chord: (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0,
+                area: wing_geometry.span * (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0,
+                aspect_ratio: wing_geometry.span.powi(2) / (wing_geometry.span * (wing_geometry.root_chord + wing_geometry.tip_chord) / 2.0),
                 angle_of_attack: 0.1,
+                lift_coefficient_base: 1.2,
+                drag_coefficient_base: 0.03,
+                efficiency_factor: 0.85,
             },
+            FlappingWing::default(),
         ));
     });
 }
 
 pub fn update_physics(
-    _time: Res<Time>,
+    time: Res<Time>,
     params: Res<SimulationParams>,
-    mut query: Query<(&Flyer, &mut FlightDynamics, &Transform, &Children)>,
-    wing_query: Query<&Wing>,
+    weather_params: Res<WeatherParams>,
+    mut atmosphere_query: Query<&mut Atmosphere>,
+    mut query: Query<(
+        &Flyer,
+        &mut FlightDynamics,
+        &Transform,
+        &Children,
+        &Propulsion,
+        Option<&mut StallIndicator>,
+    )>,
+    mut wing_query: Query<(&Wing, &FlappingWing)>,
 ) {
     if !params.is_running {
         return;
     }
     
-    for (flyer, mut dynamics, _transform, children) in query.iter_mut() {
-        // Calculate weight
+    if let Ok(mut atmosphere) = atmosphere_query.single_mut() {
+        atmosphere.air_density = calculate_air_density(
+            weather_params.temperature,
+            weather_params.pressure,
+            weather_params.humidity,
+        );
+        atmosphere.wind_velocity = calculate_wind_with_turbulence(
+            &weather_params,
+            Vec3::ZERO,
+            time.elapsed_secs(),
+        );
+    }
+    
+    let atmosphere = atmosphere_query.single().unwrap();
+    
+    for (flyer, mut dynamics, transform, children, propulsion, stall_indicator) in query.iter_mut() {
         let weight = Vec3::new(0.0, -flyer.mass * params.gravity, 0.0);
         dynamics.forces.weight = weight;
         
-        // Calculate lift for all wings
         let mut total_lift = Vec3::ZERO;
+        let mut total_drag = Vec3::ZERO;
         let mut total_wing_area = 0.0;
         
         for child in children.iter() {
-            if let Ok(wing) = wing_query.get(child) {
+            if let Ok((wing, flapping)) = wing_query.get_mut(*child) {
                 total_wing_area += wing.area;
                 
-                // Calculate airspeed (velocity relative to air)
-                let airspeed = (dynamics.velocity - params.wind_velocity).length();
+                let airspeed_vector = dynamics.velocity - atmosphere.wind_velocity;
                 
-                // Calculate lift coefficient (simplified model)
-                let lift_coefficient = calculate_lift_coefficient(wing.angle_of_attack);
+                let stall_params = StallParams {
+                    angle_of_attack: wing.angle_of_attack,
+                    critical_angle: 15.0_f32.to_radians(),
+                    post_stall_drop: 0.5,
+                    stall_progression_rate: 2.0,
+                };
+                
+                let lift_coefficient = calculate_lift_coefficient_with_stall(
+                    wing.lift_coefficient_base,
+                    wing.angle_of_attack,
+                    &stall_params,
+                );
                 
                 let lift_params = LiftParams {
-                    air_density: params.air_density as f64,
-                    air_speed: airspeed as f64,
-                    wing_area: wing.area as f64,
-                    lift_coefficient: lift_coefficient as f64,
+                    air_density: atmosphere.air_density,
+                    velocity: airspeed_vector,
+                    wing_area: wing.area,
+                    wing_span: wing.span,
+                    wing_chord: wing.chord,
+                    angle_of_attack: wing.angle_of_attack,
                 };
                 
-                let lift_magnitude = calculate_lift(&lift_params) as f32;
+                let mut lift_force = calculate_lift_force(&lift_params, lift_coefficient);
                 
-                // Lift is perpendicular to velocity direction
-                let lift_direction = if dynamics.velocity.length() > 0.1 {
-                    // Simplified: lift is mostly upward with slight forward component based on velocity
-                    Vec3::Y
-                } else {
-                    Vec3::Y
+                let ground_effect_params = GroundEffectParams {
+                    altitude: transform.translation.y,
+                    wing_span: wing.span,
+                    wing_chord: wing.chord,
                 };
                 
-                total_lift += lift_direction * lift_magnitude;
+                let ground_effect_factor = calculate_ground_effect_factor(&ground_effect_params);
+                lift_force = apply_ground_effect_to_lift(lift_force, ground_effect_factor);
+                
+                total_lift += lift_force;
+                
+                let drag_coefficient = calculate_drag_coefficient_stalled(
+                    wing.drag_coefficient_base,
+                    wing.angle_of_attack,
+                    &stall_params,
+                );
+                
+                let drag_params = DragParams {
+                    air_density: atmosphere.air_density,
+                    velocity: airspeed_vector,
+                    wing_area: wing.area,
+                    drag_coefficient,
+                    aspect_ratio: wing.aspect_ratio,
+                    efficiency_factor: wing.efficiency_factor,
+                };
+                
+                let drag_force = calculate_total_drag(&drag_params, lift_coefficient);
+                total_drag += drag_force;
+                
+                if flapping.is_active {
+                    let flapping_thrust = super::flapping::calculate_flapping_thrust(
+                        flapping,
+                        wing.area,
+                        atmosphere.air_density,
+                        time.elapsed_secs(),
+                    );
+                    dynamics.forces.thrust += flapping_thrust;
+                }
+                
+                if let Some(mut stall) = stall_indicator {
+                    stall.is_stalled = wing.angle_of_attack.abs() > stall_params.critical_angle;
+                    stall.stall_severity = if stall.is_stalled {
+                        ((wing.angle_of_attack.abs() - stall_params.critical_angle) / stall_params.critical_angle).min(1.0)
+                    } else {
+                        0.0
+                    };
+                }
             }
         }
         
         dynamics.forces.lift = total_lift;
+        dynamics.forces.drag = total_drag;
         
-        // Calculate drag (simplified)
-        let drag_coefficient = 0.3;
-        let drag_magnitude = 0.5 * params.air_density * dynamics.velocity.length_squared() * total_wing_area * drag_coefficient;
-        dynamics.forces.drag = if dynamics.velocity.length() > 0.1 {
-            -dynamics.velocity.normalize() * drag_magnitude
-        } else {
-            Vec3::ZERO
+        let thrust_params = ThrustParams {
+            thrust_power: propulsion.thrust_power * propulsion.throttle,
+            thrust_direction: propulsion.thrust_direction,
+            efficiency: propulsion.efficiency,
+            propeller_diameter: propulsion.propeller_diameter,
+            air_density: atmosphere.air_density,
+            velocity: dynamics.velocity,
         };
         
-        // Sum all forces
+        let base_thrust = calculate_thrust_force(&thrust_params);
+        dynamics.forces.thrust = dynamics.forces.thrust + base_thrust;
+        
         dynamics.forces.total = dynamics.forces.weight + dynamics.forces.lift + dynamics.forces.drag + dynamics.forces.thrust;
         
-        // Update acceleration
         dynamics.acceleration = dynamics.forces.total / flyer.mass;
-        
-        // Debug output for troubleshooting
-        if params.is_running && total_lift.length() > 0.1 {
-            println!("Lift: {:.1}N, Weight: {:.1}N, Net: {:.1}N", 
-                total_lift.length(), 
-                weight.length(), 
-                (total_lift + weight).length());
-        }
     }
 }
 
@@ -218,37 +308,25 @@ pub fn update_flight_dynamics(
     let dt = time.delta_secs() * params.simulation_speed;
     
     for (mut transform, mut dynamics, mut flight_data) in query.iter_mut() {
-        // Update velocity
-        let acceleration = dynamics.acceleration;
-        dynamics.velocity += acceleration * dt;
+        dynamics.velocity += dynamics.acceleration * dt;
         
-        // Update position
         let displacement = dynamics.velocity * dt;
         transform.translation += displacement;
         
-        // Prevent going below ground
         if transform.translation.y < 0.5 {
             transform.translation.y = 0.5;
-            dynamics.velocity.y = 0.0;
+            dynamics.velocity.y = dynamics.velocity.y.max(0.0);
             
-            // Check for crash conditions
-            if dynamics.velocity.length() > 10.0 {
-                println!("Crash! Impact velocity: {:.2} m/s", dynamics.velocity.length());
+            if dynamics.velocity.length() > 15.0 {
+                info!("Hard landing! Impact velocity: {:.1} m/s", dynamics.velocity.length());
             }
         }
         
-        // Update flight data
         flight_data.altitude = transform.translation.y;
         flight_data.airspeed = dynamics.velocity.length();
         flight_data.vertical_speed = dynamics.velocity.y;
         flight_data.flight_time += dt;
         flight_data.distance_traveled += displacement.length();
-        
-        // Debug output
-        if transform.translation.y < 0.0 || transform.translation.y > 1000.0 {
-            println!("WARNING: Object position out of bounds: {:?}", transform.translation);
-            println!("Velocity: {:?}, Acceleration: {:?}", dynamics.velocity, dynamics.acceleration);
-        }
     }
 }
 
@@ -256,78 +334,57 @@ pub fn handle_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut params: ResMut<SimulationParams>,
     mut wing_query: Query<&mut Wing>,
-    mut query: Query<(&mut Transform, &mut FlightDynamics, &mut FlightData), With<Flyer>>,
+    mut query: Query<(
+        &mut Transform,
+        &mut FlightDynamics,
+        &mut FlightData,
+        &mut Propulsion,
+    ), With<Flyer>>,
 ) {
-    // Start/stop simulation
     if keyboard.just_pressed(KeyCode::Space) {
         params.is_running = !params.is_running;
-        println!("Simulation {}", if params.is_running { "started" } else { "paused" });
     }
     
-    // Adjust wing angle of attack
     if keyboard.pressed(KeyCode::KeyW) {
         for mut wing in wing_query.iter_mut() {
-            wing.angle_of_attack = (wing.angle_of_attack + 0.01).min(0.3);
-            println!("Wing angle: {:.1}°", wing.angle_of_attack.to_degrees());
+            wing.angle_of_attack = (wing.angle_of_attack + 0.02).min(0.35);
         }
     }
     if keyboard.pressed(KeyCode::KeyS) {
         for mut wing in wing_query.iter_mut() {
-            wing.angle_of_attack = (wing.angle_of_attack - 0.01).max(-0.1);
-            println!("Wing angle: {:.1}°", wing.angle_of_attack.to_degrees());
+            wing.angle_of_attack = (wing.angle_of_attack - 0.02).max(-0.15);
         }
     }
     
-    // Add thrust
-    if keyboard.pressed(KeyCode::KeyT) {
-        for (_, mut dynamics, _) in query.iter_mut() {
-            dynamics.forces.thrust = Vec3::new(0.0, 100.0, 50.0); // Upward and forward thrust
-            println!("Thrust applied: {:?}", dynamics.forces.thrust);
-        }
-    } else {
-        for (_, mut dynamics, _) in query.iter_mut() {
-            dynamics.forces.thrust = Vec3::ZERO;
+    for (_, _, _, mut propulsion) in query.iter_mut() {
+        if keyboard.pressed(KeyCode::KeyT) {
+            propulsion.throttle = (propulsion.throttle + 0.02).min(1.0);
+        } else {
+            propulsion.throttle = (propulsion.throttle - 0.05).max(0.0);
         }
     }
     
-    // Reset simulation
     if keyboard.just_pressed(KeyCode::KeyR) {
         params.is_running = false;
-        for (mut transform, mut dynamics, mut flight_data) in query.iter_mut() {
-            // Reset position
-            transform.translation = Vec3::new(0.0, 5.0, 0.0);
+        for (mut transform, mut dynamics, mut flight_data, mut propulsion) in query.iter_mut() {
+            transform.translation = Vec3::new(0.0, 10.0, 0.0);
             
-            // Reset dynamics
-            dynamics.velocity = Vec3::ZERO;
+            dynamics.velocity = Vec3::new(0.0, 0.0, 15.0);
             dynamics.acceleration = Vec3::ZERO;
             dynamics.angular_velocity = Vec3::ZERO;
             dynamics.forces = Forces::default();
             
-            // Reset flight data
-            flight_data.altitude = 5.0;
-            flight_data.airspeed = 0.0;
+            flight_data.altitude = 10.0;
+            flight_data.airspeed = 15.0;
             flight_data.vertical_speed = 0.0;
             flight_data.flight_time = 0.0;
             flight_data.distance_traveled = 0.0;
+            
+            propulsion.throttle = 0.0;
         }
-        println!("Simulation reset");
-    }
-}
-
-fn calculate_lift_coefficient(angle_of_attack: f32) -> f32 {
-    // Simplified lift coefficient model
-    // CL = 2π * α for small angles
-    // With stall consideration
-    let alpha_deg = angle_of_attack.to_degrees();
-    
-    if alpha_deg < -5.0 {
-        0.0
-    } else if alpha_deg < 15.0 {
-        2.0 * std::f32::consts::PI * angle_of_attack
-    } else if alpha_deg < 20.0 {
-        // Stall region
-        1.2 - (alpha_deg - 15.0) * 0.1
-    } else {
-        0.5 // Post-stall
+        
+        for mut wing in wing_query.iter_mut() {
+            wing.angle_of_attack = 0.1;
+        }
     }
 }
