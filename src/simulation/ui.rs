@@ -10,7 +10,7 @@ pub struct UIPlugin;
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugins(EguiPlugin)
+            .add_plugins(EguiPlugin::default())
             .init_resource::<UIState>()
             .add_systems(Startup, setup_ui)
             .add_systems(Update, update_ui_text)
@@ -187,7 +187,7 @@ fn render_egui_ui(
     mut flyer_query: Query<&mut Flyer>,
     mut propulsion_query: Query<&mut Propulsion>,
     mut flapping_query: Query<&mut FlappingWing>,
-    mut atmosphere_query: Query<&mut Atmosphere>,
+    atmosphere_query: Query<&Atmosphere>,
     mut params: ResMut<SimulationParams>,
     mut weather_params: ResMut<WeatherParams>,
 ) {
@@ -197,7 +197,7 @@ fn render_egui_ui(
     
     egui::Window::new("Flight Parameters")
         .default_pos([400.0, 50.0])
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("Aircraft Configuration");
             
             ui.collapsing("Wing Parameters", |ui| {
@@ -276,7 +276,7 @@ fn render_egui_ui(
     if ui_state.show_telemetry {
         egui::Window::new("Flight Telemetry")
             .default_pos([800.0, 50.0])
-            .show(contexts.ctx_mut(), |ui| {
+            .show(contexts.ctx_mut().unwrap(), |ui| {
                 ui.heading("Real-time Data");
                 ui.label("Detailed telemetry data will be displayed here");
             });

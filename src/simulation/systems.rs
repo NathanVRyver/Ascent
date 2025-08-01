@@ -187,17 +187,17 @@ pub fn update_physics(
     
     let atmosphere = atmosphere_query.single().unwrap();
     
-    for (flyer, mut dynamics, transform, children, propulsion, stall_indicator) in query.iter_mut() {
+    for (flyer, mut dynamics, transform, children, propulsion, mut stall_indicator) in query.iter_mut() {
         let weight = Vec3::new(0.0, -flyer.mass * params.gravity, 0.0);
         dynamics.forces.weight = weight;
         
         let mut total_lift = Vec3::ZERO;
         let mut total_drag = Vec3::ZERO;
-        let mut total_wing_area = 0.0;
+        let mut _total_wing_area = 0.0;
         
         for child in children.iter() {
             if let Ok((wing, flapping)) = wing_query.get_mut(child) {
-                total_wing_area += wing.area;
+                _total_wing_area += wing.area;
                 
                 let airspeed_vector = dynamics.velocity - atmosphere.wind_velocity;
                 
@@ -264,7 +264,7 @@ pub fn update_physics(
                     dynamics.forces.thrust += flapping_thrust;
                 }
                 
-                if let Some(mut stall) = stall_indicator {
+                if let Some(ref mut stall) = stall_indicator {
                     stall.is_stalled = wing.angle_of_attack.abs() > stall_params.critical_angle;
                     stall.stall_severity = if stall.is_stalled {
                         ((wing.angle_of_attack.abs() - stall_params.critical_angle) / stall_params.critical_angle).min(1.0)

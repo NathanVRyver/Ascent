@@ -36,7 +36,7 @@ impl Plugin for SimulationPlugin {
             .add_systems(Update, flapping::toggle_flapping)
             .add_systems(Update, telemetry::record_telemetry)
             .add_systems(Update, telemetry::toggle_telemetry_recording)
-            .add_systems(Update, telemetry::export_telemetry_data)
-            .add_systems(Update, telemetry::display_telemetry_stats);
+            .add_systems(Update, telemetry::export_telemetry_data);
+            // .add_systems(Update, telemetry::display_telemetry_stats);
     }
 }

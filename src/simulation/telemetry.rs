@@ -174,7 +174,7 @@ pub fn display_telemetry_stats(
     
     bevy_egui::egui::Window::new("Flight Telemetry")
         .default_pos([800.0, 50.0])
-        .show(contexts.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut().unwrap(), |ui| {
             ui.heading("Real-time Data");
             
             ui.label(format!("Recording: {}", if telemetry.recording { "Active" } else { "Stopped" }));
