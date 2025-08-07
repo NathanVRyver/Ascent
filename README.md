@@ -2,6 +2,9 @@
 
 A comprehensive aerodynamic and structural analysis platform for human-powered flight research.
 
+
+<img width="925" height="999" alt="Screenshot 2025-08-07 at 08 14 03" src="https://github.com/user-attachments/assets/a5985b9b-5a54-4321-ad13-cf8cde24dee8" />
+
 ## Overview
 
 This is a scientifically rigorous flight engineering system designed to analyze the feasibility of human-powered flight configurations. Unlike simplified flight simulators, this system incorporates real aerospace engineering principles including structural analysis, power requirements, and material properties to determine whether a given configuration can achieve sustained human flight.
