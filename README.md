@@ -41,12 +41,6 @@ This is a scientifically rigorous flight engineering system designed to analyze 
 - Rust (latest stable version)
 - A display capable of at least 800x600 resolution
 
-### Installation
-```bash
-git clone <repository-url>
-cd Ascent
-cargo run
-```
 
 ## User Interface Guide
 
