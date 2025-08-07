@@ -1,9 +1,7 @@
 [package]
 name = "Ascent"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-bevy = "0.16.1"
-rand = "0.8"
-bevy_egui = "0.35.1"
+macroquad = "0.4"
