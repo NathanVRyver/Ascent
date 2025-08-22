@@ -2,7 +2,7 @@
 
 A comprehensive aerodynamic and structural analysis platform for human-powered flight research.
 
-<img width="1680" height="1001" alt="Screenshot 2025-08-07 at 08 51 21" src="https://github.com/user-attachments/assets/52e4eccb-2250-42d0-81ff-39a09417b462" />
+<img width="1678" height="996" alt="Screenshot 2025-08-23 at 00 40 51" src="https://github.com/user-attachments/assets/f75e1632-ce6c-4421-ad1c-60e06dcfaf47" />
 
 
 ## Overview
